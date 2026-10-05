@@ -22,8 +22,12 @@ def _section(mapping: Mapping[str, Any], key: str) -> Mapping[str, Any]:
     return value
 
 
-def _number(section: Mapping[str, Any], key: str, minimum: float | None = None) -> float:
+def _number(section: Mapping[str, Any], key: str, minimum: float | None = None, default: float | None = None) -> float:
     raw = section.get(key)
+    if raw is None:
+        if default is None:
+            raise ConfigError(f"缺少必填数值项 {key}", component="config")
+        raw = default
     if isinstance(raw, bool) or not isinstance(raw, (int, float)):
         raise ConfigError(f"{key} 必须是数值", component="config")
     value = float(raw)
@@ -313,23 +317,33 @@ class BalanceLimits:
 
 @dataclass(frozen=True)
 class QuotaLimits:
-    """充放电配额与峰谷电价。"""
+    """充放电配额与峰谷电价。
+
+    ``period_hours`` 保留为 24 只用于兼容旧配置：记账周期固定为本地自然日，
+    不允许滚动周期；``tz_offset_hours`` 决定本地零点的位置。
+    """
 
     period_hours: float
     charge_quota_kwh: float
     discharge_quota_kwh: float
     tariff_peak: float
     tariff_valley: float
+    tz_offset_hours: float = 8.0
 
     @classmethod
     def from_mapping(cls, section: Mapping[str, Any]) -> "QuotaLimits":
         limits = cls(
-            period_hours=_number(section, "period_hours", minimum=0.1),
+            period_hours=_number(section, "period_hours", default=24.0, minimum=0.1),
             charge_quota_kwh=_number(section, "charge_quota_kwh", minimum=0.1),
             discharge_quota_kwh=_number(section, "discharge_quota_kwh", minimum=0.1),
             tariff_peak=_number(section, "tariff_peak", minimum=0.0),
             tariff_valley=_number(section, "tariff_valley", minimum=0.0),
+            tz_offset_hours=_number(section, "tz_offset_hours", default=8.0, minimum=-12.0),
         )
+        if abs(limits.period_hours - 24.0) > 1e-9:
+            raise ConfigError("记账周期固定为本地自然日，period_hours 只能取 24", component="config")
+        if limits.tz_offset_hours > 14.0:
+            raise ConfigError("时区偏移不能超过 +14 小时", component="config")
         if limits.tariff_valley > limits.tariff_peak:
             raise ConfigError("谷电价不能高于峰电价", component="config")
         return limits
@@ -486,6 +500,7 @@ def config_to_mapping(cfg: StationConfig) -> dict:
                 "discharge_quota_kwh": cfg.quota.discharge_quota_kwh,
                 "tariff_peak": cfg.quota.tariff_peak,
                 "tariff_valley": cfg.quota.tariff_valley,
+                "tz_offset_hours": cfg.quota.tz_offset_hours,
             },
         },
     }

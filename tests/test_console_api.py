@@ -127,3 +127,22 @@ def test_console_rejects_bad_numeric_parameter(platform):
             raise AssertionError("非法参数应当返回 409")
     finally:
         server.stop()
+
+
+def test_console_quota_reconciliation_and_monthly(platform):
+    server = ConsoleServer(platform, port=0)
+    base_url = server.start()
+    try:
+        code, recon = _get(base_url, "/api/quota/reconciliation")
+        assert code == 200
+        assert recon["balanced"] is True
+        assert "month_key" in recon
+        code, monthly = _get(base_url, "/api/quota/monthly")
+        assert code == 200
+        assert monthly["period"] == "month"
+        assert "charge_cost" in monthly and "margin" in monthly
+        code, monthly = _get(base_url, "/api/quota/monthly?month=2025-12")
+        assert code == 200
+        assert monthly["month_key"] == "2025-12"
+    finally:
+        server.stop()

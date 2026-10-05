@@ -67,6 +67,9 @@ class Api:
         add("GET", "/api/soc", lambda params, body: self._platform.soc_snapshot())
         add("GET", "/api/balance", lambda params, body: self._platform.balance_snapshot())
         add("GET", "/api/quota", lambda params, body: self._platform.quota_snapshot())
+        add("GET", "/api/quota/reconciliation", lambda params, body: self._platform.quota_reconciliation())
+        add("GET", "/api/quota/monthly", self._quota_monthly)
+        add("POST", "/api/quota/diff-note", self._quota_diff_note)
         add("GET", "/api/audit", self._audit)
         add("GET", "/api/audit/report", lambda params, body: self._platform.audit.report())
         add("GET", "/api/audit/operations", self._operations)
@@ -190,6 +193,19 @@ class Api:
         return self._platform.discharge(
             power_kw=_as_float(body, "power_kw", 200.0),
             dt=_as_float(body, "dt", 60.0),
+        )
+
+    def _quota_monthly(self, params: dict, body: dict) -> dict:
+        month_key = params.get("month")
+        return self._platform.quota_monthly_settlement(str(month_key) if month_key else None)
+
+    def _quota_diff_note(self, params: dict, body: dict) -> dict:
+        return self._platform.quota_note_diff(
+            day_key=str(body.get("day_key", "")),
+            claimed_kwh=_as_float(body, "claimed_kwh", 0.0),
+            direction=str(body.get("direction", "charge")),
+            source=str(body.get("source", "external_meter")),
+            reason=str(body.get("reason", "")),
         )
 
     def _charge(self, params: dict, body: dict) -> dict:

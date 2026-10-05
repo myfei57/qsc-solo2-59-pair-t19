@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class QuotaSnapshot:
-    """配额某一时刻的状态。"""
+    """配额某一时刻的状态（当日累计、归档台账与月结视图同口径）。"""
 
     period: str
     rolls: int
@@ -16,7 +16,8 @@ class QuotaSnapshot:
     tariff: dict
     settlement: dict
     rejections: int
-    history: list
+    archives: dict
+    monthly: dict
 
     def as_dict(self) -> dict:
         return {
@@ -27,5 +28,6 @@ class QuotaSnapshot:
             "tariff": dict(self.tariff),
             "settlement": dict(self.settlement),
             "rejections": self.rejections,
-            "history": list(self.history),
+            "archives": dict(self.archives),
+            "monthly": dict(self.monthly),
         }

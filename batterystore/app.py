@@ -737,6 +737,36 @@ class Platform:
     def quota_snapshot(self) -> dict:
         return self.quota.snapshot(self.clock.now()).as_dict()
 
+    def quota_reconciliation(self) -> dict:
+        """配额对账视图：归档日 + 当日，两侧同口径守恒。"""
+
+        return self.quota.reconciliation(self.clock.now())
+
+    def quota_monthly_settlement(self, month_key: str | None = None) -> dict:
+        """自然月峰谷结算（冻结快照 + 追加分片，差异说明只列示）。"""
+
+        return self.quota.monthly_settlement(month_key, now=self.clock.now())
+
+    def quota_note_diff(
+        self,
+        day_key: str,
+        claimed_kwh: float,
+        direction: str,
+        *,
+        source: str = "external_meter",
+        reason: str = "",
+    ) -> dict:
+        """对已归档自然日追加差异说明；不改动任何归档值。"""
+
+        return self.quota.note_diff(
+            day_key,
+            claimed_kwh,
+            direction,
+            source=source,
+            reason=reason,
+            now=self.clock.now(),
+        )
+
     def audit_snapshot(self) -> dict:
         return self.audit.snapshot().as_dict()
 
