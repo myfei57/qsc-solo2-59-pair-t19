@@ -63,19 +63,40 @@ def charge_rack(
         if not settled:
             violations.append(f"voltage_not_settled_step_{index + 1}")
             break
+        target_current = current + pcs.limits.current_step_a
         try:
-            current = ladder.raise_to(current + pcs.limits.current_step_a)
+            target_current = ladder.raise_to(target_current)
         except StoreError as error:
             violations.append("current_raise_rejected")
             flow.append({"component": "pcs", "action": "raise_rejected", "detail": error.as_record()})
             break
-        energy_kwh = abs(current) * rack.voltage_v() * dt / 3600.0 / 1000.0
+        energy_kwh = abs(target_current) * rack.voltage_v() * dt / 3600.0 / 1000.0
+        # 先授权后升流：额度不足就保持上一个有效功率，本步不升流、不记账。
+        preflight = quota.preflight("charge", energy_kwh, now)
+        flow.append({"component": "quota", "action": "preflight", "detail": {"index": index + 1, **preflight}})
+        if not preflight["allowed"]:
+            held = pcs.hold_power("quota_rejected")
+            flow.append({"component": "pcs", "action": "hold_last_valid_power", "detail": held})
+            violations.append("quota_exceeded")
+            break
+        current = target_current
         try:
-            quota.record_charge(energy_kwh, now)
+            receipt = quota.record_charge(energy_kwh, now, duration_s=dt)
         except StoreError as error:
+            held = pcs.hold_power("quota_rejected")
+            flow.append({"component": "pcs", "action": "hold_last_valid_power", "detail": held})
             violations.append("quota_exceeded")
             flow.append({"component": "quota", "action": "charge_rejected", "detail": error.as_record()})
             break
+        flow.append(
+            {
+                "component": "quota",
+                "action": "charge_recorded",
+                "detail": {"index": index + 1, "period": receipt["period"]},
+            }
+        )
+        if receipt.get("crossing"):
+            flow.append({"component": "quota", "action": "cross_period_tail", "detail": receipt["crossing"]})
         delta_ah = soc.accumulate(abs(current), dt)
         flow.append(
             {

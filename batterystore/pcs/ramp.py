@@ -60,3 +60,9 @@ class RampLimiter:
         previous = self._current_kw
         self._current_kw = 0.0
         return previous
+
+    def freeze(self, kw: float) -> float:
+        """记账侧拒绝时冻结爬坡输出，下一次 :meth:`step` 从该值继续。"""
+
+        self._current_kw = float(kw)
+        return self._current_kw

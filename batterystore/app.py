@@ -737,6 +737,20 @@ class Platform:
     def quota_snapshot(self) -> dict:
         return self.quota.snapshot(self.clock.now()).as_dict()
 
+    def quota_period_report(self, period: str) -> dict:
+        """结算单个周期（含已归档周期），归档差异单列。"""
+
+        return self.quota.period_settlement(period)
+
+    def quota_monthly_reconciliation(self, start_ts: float, end_ts: float) -> dict:
+        """月结：两种归属口径差额 + 守恒对账 + 全部跨周期段。"""
+
+        return {
+            "attribution_difference": self.quota.attribution_difference(start_ts, end_ts),
+            "reconciliation": self.quota.reconciliation(),
+            "crossings": self.quota.crossings(),
+        }
+
     def audit_snapshot(self) -> dict:
         return self.audit.snapshot().as_dict()
 

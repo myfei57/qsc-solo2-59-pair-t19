@@ -313,13 +313,19 @@ class BalanceLimits:
 
 @dataclass(frozen=True)
 class QuotaLimits:
-    """充放电配额与峰谷电价。"""
+    """充放电配额与峰谷电价。
+
+    配额周期、超额判据与峰谷结算共用同一套口径：周期按本地自然日零点对齐，
+    一天必须能被周期长度整除（例如 24/12/8/4/2/1/0.5 小时），不允许再出现
+    与日历日漂移的滚动窗口。
+    """
 
     period_hours: float
     charge_quota_kwh: float
     discharge_quota_kwh: float
     tariff_peak: float
     tariff_valley: float
+    timezone_offset_hours: float
 
     @classmethod
     def from_mapping(cls, section: Mapping[str, Any]) -> "QuotaLimits":
@@ -329,7 +335,13 @@ class QuotaLimits:
             discharge_quota_kwh=_number(section, "discharge_quota_kwh", minimum=0.1),
             tariff_peak=_number(section, "tariff_peak", minimum=0.0),
             tariff_valley=_number(section, "tariff_valley", minimum=0.0),
+            timezone_offset_hours=_number(section, "timezone_offset_hours", minimum=-12.0),
         )
+        if limits.timezone_offset_hours > 14.0:
+            raise ConfigError("时区偏移必须在 -12 到 +14 小时之间", component="config")
+        slots_per_day = 24.0 / limits.period_hours
+        if abs(slots_per_day - round(slots_per_day)) > 1e-9:
+            raise ConfigError("周期长度必须整除 24 小时并对齐本地零点", component="config")
         if limits.tariff_valley > limits.tariff_peak:
             raise ConfigError("谷电价不能高于峰电价", component="config")
         return limits
@@ -402,7 +414,7 @@ def default_config() -> StationConfig:
         grid=GridLimits(400.0, 450.0, 50.0, 0.2, 10.0),
         soc=SocLimits(280.0, 0.98, 7200.0, 3.0, 50.0),
         balance=BalanceLimits(25.0, 4.0, 2.0, 600.0, 2),
-        quota=QuotaLimits(24.0, 2000.0, 2000.0, 1.2, 0.4),
+        quota=QuotaLimits(24.0, 2000.0, 2000.0, 1.2, 0.4, 8.0),
     )
 
 
@@ -486,6 +498,7 @@ def config_to_mapping(cfg: StationConfig) -> dict:
                 "discharge_quota_kwh": cfg.quota.discharge_quota_kwh,
                 "tariff_peak": cfg.quota.tariff_peak,
                 "tariff_valley": cfg.quota.tariff_valley,
+                "timezone_offset_hours": cfg.quota.timezone_offset_hours,
             },
         },
     }

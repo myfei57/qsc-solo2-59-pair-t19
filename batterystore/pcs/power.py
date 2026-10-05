@@ -18,6 +18,8 @@ class PowerController:
         self._power_kw = 0.0
         self._ratio = 1.0
         self._commands = 0
+        # 上一个有效（已授权、已实际输出过的）功率，拒绝新指令时保持它。
+        self._last_valid_kw = 0.0
 
     @property
     def max_power_kw(self) -> float:
@@ -30,6 +32,24 @@ class PowerController:
         self._power_kw = float(power_kw)
         self._commands += 1
         return previous
+
+    def mark_valid(self, output_kw: float | None = None) -> float:
+        """登记"上一个有效功率"（默认取当前降额后输出），返回该值。"""
+
+        self._last_valid_kw = self.output_kw() if output_kw is None else float(output_kw)
+        return self._last_valid_kw
+
+    def hold_last_valid(self) -> dict:
+        """拒绝新指令时冻结降额后输出在上一个有效值，不接受新指令值。
+
+        先把降额系数钉为 1、再把指令值设为上一个有效出力，输出即为
+        冻结值，不会被当前（可能已变化的）降额系数再折算一次。
+        """
+
+        held = self._last_valid_kw
+        self._ratio = 1.0
+        self._power_kw = held
+        return {"held_kw": round(held, 3), "requested_ignored": True}
 
     def with_derate(self, ratio: float) -> float:
         """更新降额系数，返回生效后的系数。"""

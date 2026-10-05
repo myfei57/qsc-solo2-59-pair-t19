@@ -33,14 +33,22 @@
       ].map(([key, value]) => `<tr><th>${key}</th><td>${value}</td></tr>`).join("");
 
       const quota = await (await fetch("/api/quota")).json();
+      const policyText = quota.policy ?
+        `${quota.policy.period === "local_calendar_day" ? "本地自然日" : quota.policy.period}` +
+        `｜归属：${quota.policy.attribution === "start_time" ? "开始时刻" : quota.policy.attribution}` +
+        `｜周期 ${quota.policy.period_hours}h｜UTC${quota.policy.timezone_offset_hours >= 0 ? "+" : ""}${quota.policy.timezone_offset_hours}` : "";
       document.getElementById("quota").innerHTML = [
         ["周期", quota.period],
+        ["口径", policyText],
         ["滚动次数", quota.rolls],
         ["已充电量(kWh)", quota.totals.charge_kwh],
         ["已放电量(kWh)", quota.totals.discharge_kwh],
         ["剩余充电(kWh)", quota.remaining.charge_kwh],
         ["剩余放电(kWh)", quota.remaining.discharge_kwh],
         ["本周期收益", quota.settlement.margin],
+        ["跨周期段(本期尾部)", (quota.crossings || []).map((c) =>
+          `${c.start_period}→${c.tail_period} ${c.direction} 尾部${c.tail_kwh}kWh`).join("；") || "无"],
+        ["守恒对账", quota.reconciliation && quota.reconciliation.charge_balanced && quota.reconciliation.discharge_balanced ? "平衡" : "不平"],
       ].map(([key, value]) => `<tr><th>${key}</th><td>${value}</td></tr>`).join("");
 
       const trend = await (await fetch("/api/trend?signal=rk-01.voltage")).json();

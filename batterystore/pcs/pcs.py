@@ -99,6 +99,7 @@ class Pcs:
         self._power.with_derate(factor.ratio)
         self._power.command(clamped)
         ramped = self._ramp.step(self._power.output_kw(), dt)
+        self._power.mark_valid(ramped)
         violations = self._protection.check(self._ladder.current_a(), ramped)
         return {
             "requested_kw": round(float(power_kw), 3),
@@ -114,6 +115,18 @@ class Pcs:
         self._derate = combine_ratios(**ratios)
         self._power.with_derate(self._derate.ratio)
         return self._derate
+
+    def hold_power(self, reason: str) -> dict:
+        """配额等记账侧拒绝时，功率保持在上一个有效值。
+
+        不跳闸、不清零、不回滚已记账电量；新指令值被忽略，爬坡器冻结
+        在当前出力，直到下一次重新授权成功。
+        """
+
+        held = self._power.hold_last_valid()
+        self._ramp.freeze(held["held_kw"])
+        held["reason"] = reason
+        return held
 
     def trip(self, reason: str) -> dict:
         """执行跳闸：先切到跳闸态再分断接触器。"""

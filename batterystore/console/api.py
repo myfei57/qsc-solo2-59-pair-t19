@@ -67,6 +67,8 @@ class Api:
         add("GET", "/api/soc", lambda params, body: self._platform.soc_snapshot())
         add("GET", "/api/balance", lambda params, body: self._platform.balance_snapshot())
         add("GET", "/api/quota", lambda params, body: self._platform.quota_snapshot())
+        add("GET", "/api/quota/period/{period}", self._quota_period)
+        add("GET", "/api/quota/reconcile", self._quota_reconcile)
         add("GET", "/api/audit", self._audit)
         add("GET", "/api/audit/report", lambda params, body: self._platform.audit.report())
         add("GET", "/api/audit/operations", self._operations)
@@ -175,6 +177,17 @@ class Api:
         if segment is not None:
             payload["records"] = self._platform.audit.replay_segment(int(segment))
         return payload
+
+    def _quota_period(self, params: dict, body: dict) -> dict:
+        return self._platform.quota_period_report(str(params.get("period", "")))
+
+    def _quota_reconcile(self, params: dict, body: dict) -> dict:
+        try:
+            start_ts = float(params.get("start", 0.0))
+            end_ts = float(params.get("end", self._platform.clock.now()))
+        except (TypeError, ValueError) as error:
+            raise StoreError("月结窗口参数必须是数值", component="console") from error
+        return self._platform.quota_monthly_reconciliation(start_ts=start_ts, end_ts=end_ts)
 
     def _cycle(self, params: dict, body: dict) -> dict:
         return self._platform.cycle(dt=_as_float(body, "dt", 5.0))
